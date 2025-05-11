@@ -11,8 +11,8 @@ class CostmapNode : public rclcpp::Node {
   public:
     CostmapNode();
     void publishMessage();
-    void publishCostmap();
-    void laserCallback(const sensor_msgs::msg::LaserScan::SharedPtr msg);
+    void publishCostmap() const;
+    void laserCallback(const sensor_msgs::msg::LaserScan::SharedPtr msg) const;
 
   private:
     robot::CostmapCore costmap_;
@@ -20,6 +20,12 @@ class CostmapNode : public rclcpp::Node {
     rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr costmap_pub_;
     rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr laser_sub_;
     rclcpp::TimerBase::SharedPtr timer_;
+
+    double resolution_;
+    int width_;
+    int height_;
+    geometry_msgs::msg::Pose origin_;
+    double inflation_radius_;
 };
 
 #endif 

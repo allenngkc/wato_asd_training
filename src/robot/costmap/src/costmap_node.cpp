@@ -8,59 +8,46 @@
 #include "costmap_node.hpp"
 
 CostmapNode::CostmapNode() : Node("costmap"), costmap_(robot::CostmapCore(this->get_logger())) {
-  costmap_.initializeCostmap(10.0, 10.0, 0.1);
   RCLCPP_INFO(this->get_logger(), "Hello, Console!");
+  geometry_msgs::msg::Pose origin;
+  origin.position.x = -20.0;
+  origin.position.y = -20.0;
+  origin.position.z = 0.0;
+  origin.orientation.w = 1.0;
+
+  costmap_.initializeCostmap(0.1, 100, 100, origin, 1);
+
   // string_pub_ = this->create_publisher<std_msgs::msg::String>("/test_topic", 10);
   costmap_pub_ = this->create_publisher<nav_msgs::msg::OccupancyGrid>("/costmap", 10);
   laser_sub_ = this->create_subscription<sensor_msgs::msg::LaserScan>(
     "/lidar", 10, std::bind(&CostmapNode::laserCallback, this, std::placeholders::_1));
 }
 
-void CostmapNode::laserCallback(const sensor_msgs::msg::LaserScan::SharedPtr msg) {
-  costmap_.initializeCostmap(10.0, 10.0, 0.1);
-  RCLCPP_INFO(this->get_logger(), "Processing LaserScan message");
-  int x_grid = 0, y_grid = 0;
-  for (size_t i = 0; i < msg->ranges.size(); ++i) {
-    double range = msg->ranges[i];
-    double angle = msg->angle_min + i * msg->angle_increment;
-    if (range > msg->range_max || range < msg->range_min) continue;
-
-    double x = range * std::cos(angle);
-    double y = range * std::sin(angle);
-    x_grid = 5 + static_cast<int>(x/costmap_.getResolution());
-    y_grid = 5 + static_cast<int>(y/costmap_.getResolution());
-
-    costmap_.markObstacle(x_grid, y_grid);
-    RCLCPP_INFO(this->get_logger(), "Obstacle at grid (%d, %d)", x_grid, y_grid);
-  }
-   RCLCPP_INFO(this->get_logger(), "FINISHED processing LaserScan message");
-  costmap_.inflateObstacle(x_grid, y_grid, 1.0, 100.0);
+void CostmapNode::laserCallback(const sensor_msgs::msg::LaserScan::SharedPtr msg) const {
+  
+  costmap_.updateCostmap(msg);
   publishCostmap();
+  
 }
 
-void CostmapNode::publishCostmap() {
-  RCLCPP_INFO(this->get_logger(), "Publishing costmap data");
+void CostmapNode::publishCostmap() const {
   
-  auto grid_msg = nav_msgs::msg::OccupancyGrid();
-  grid_msg.header.stamp = this->now();
-  grid_msg.header.frame_id = "robot/chassis/lidar";
-  
-  grid_msg.info.resolution = costmap_.getResolution();
-  grid_msg.info.width = costmap_.getWidth();
-  grid_msg.info.height = costmap_.getHeight();
+  auto costmap_msg = *costmap_.getCostmapData();
+  costmap_msg.header.frame_id = "map";
+  costmap_msg.header.stamp = this->now();
 
-  grid_msg.info.origin.position.x = -(grid_msg.info.width * grid_msg.info.resolution) / 2.0;
-  grid_msg.info.origin.position.y = -(grid_msg.info.height * grid_msg.info.resolution) / 2.0;
-
-  grid_msg.data.resize(grid_msg.info.width * grid_msg.info.height, 0);
-  auto occupancy_grid = costmap_.getOccupancyGrid();
-  for (size_t i = 0; i < occupancy_grid.size(); ++i) {
-    for (size_t j = 0; j < occupancy_grid[i].size(); ++j) {
-      grid_msg.data[i * grid_msg.info.width + j] = occupancy_grid[i][j];
+int width = costmap_msg.info.width;
+int height = costmap_msg.info.height;
+// RCLCPP_INFO(this->get_logger(), "Costmap width: %d, height: %d", width, height);
+  for (int i = 0; i < height; ++i) {
+    for (int j = 0; j < width; ++j) {
+        int index = i * width + j;  // row-major order
+        if (costmap_msg.data[index] > 0) {
+            RCLCPP_INFO(this->get_logger(), "index: %d val: %d", index, costmap_msg.data[index]);
+        }
     }
-  }
-  costmap_pub_->publish(grid_msg);
-  RCLCPP_INFO(this->get_logger(), "Costmap published");
+}
+  costmap_pub_->publish(costmap_msg);
 }
 
 void CostmapNode::publishMessage() {
