@@ -6,7 +6,7 @@ MapMemoryNode::MapMemoryNode() : Node("map_memory"), map_memory_(robot::MapMemor
   costmap_sub_ = this->create_subscription<nav_msgs::msg::OccupancyGrid>(
     "costmap", 10, std::bind(&MapMemoryNode::costmapCallback, this, std::placeholders::_1));
   odom_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
-    "odom", 10, std::bind(&MapMemoryNode::odomCallback, this, std::placeholders::_1));
+    "odom/filtered", 10, std::bind(&MapMemoryNode::odomCallback, this, std::placeholders::_1));
   map_pub_ = this->create_publisher<nav_msgs::msg::OccupancyGrid>("map", 10);
   timer_ = this->create_wall_timer(
         std::chrono::seconds(1), std::bind(&MapMemoryNode::updateMap, this));
@@ -37,6 +37,7 @@ void MapMemoryNode::odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg) {
 }
 
 void MapMemoryNode::updateMap() {
+  // RCLCPP_INFO(this->get_logger(), "running update costmap into global map.");
   if (map_memory_.getCostmapUpdate() && map_memory_.getShouldUpdateMap()) {
     map_memory_.integrateCostmap();
     map_pub_->publish(map_memory_.getGlobalMap());
