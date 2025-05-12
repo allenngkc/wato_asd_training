@@ -29,6 +29,8 @@ class MapMemoryCore {
     bool getShouldUpdateMap();
     nav_msgs::msg::OccupancyGrid getGlobalMap();
 
+    double last_yaw = 0.0;
+
   private:
     rclcpp::Logger logger_;
     nav_msgs::msg::OccupancyGrid global_map_;
