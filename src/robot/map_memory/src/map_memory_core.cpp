@@ -6,6 +6,7 @@
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "nav_msgs/msg/occupancy_grid.hpp"
 #include "nav_msgs/msg/odometry.hpp"
+#include <eigen3/Eigen/Core>
 
 namespace robot
 {
@@ -30,45 +31,37 @@ void MapMemoryCore::setShouldUpdateMap(bool val) {
 }
 void MapMemoryCore::setlatestOdom(nav_msgs::msg::Odometry msg) {
   latest_odom_ = msg;
-  last_x = latest_odom_.pose.pose.position.x;
-  last_y = latest_odom_.pose.pose.position.y;
 }
 
 void MapMemoryCore::integrateCostmap() {
-  const geometry_msgs::msg::Quaternion &q = latest_odom_.pose.pose.orientation;
-  tf2::Quaternion quat(q.x, q.y, q.z, q.w);
-  tf2::Matrix3x3 mat(quat);
-  double roll,pitch,yaw;
-  mat.getRPY(roll,pitch,yaw);
-  
-  for (size_t j{0}; j < latest_costmap_.info.height; ++j) {
-    for (size_t i{0}; i < latest_costmap_.info.width; ++i) {
-      int local_index = j * latest_costmap_.info.width + i;
+  for (size_t i = 0; i < global_map_.data.size(); i++) {
+      int w = global_map_.info.width;
+      double res = global_map_.info.resolution;
+      double x = (int(i % w) + 0.5) * res;
+      double y = (int(i / w) + 0.5) * res;
 
-      int8_t cost = latest_costmap_.data[local_index];
-      if (cost == -1 || cost == 0) {
-        continue;
-      }
-      double local_x = (i * latest_costmap_.info.resolution) + latest_costmap_.info.origin.position.x;
-      double local_y = (j * latest_costmap_.info.resolution) + latest_costmap_.info.origin.position.y;
+      Eigen::Vector2d p_local;
+      p_local << x + (global_map_.info.origin.position.x - last_x),
+                  y + (global_map_.info.origin.position.y - last_y);
+      Eigen::Matrix2d rot_mat;
+      rot_mat << cos(last_yaw), sin(last_yaw),
+                  -sin(last_yaw), cos(last_yaw);
+                  
+      p_local = rot_mat * p_local;
+      double x_local = p_local[0];
+      double y_local = p_local[1];
 
-      double global_x = last_x + local_x * std::cos(yaw) - local_y * std::sin(yaw);
-      double global_y = last_y + local_x * std::sin(yaw) + local_y * std::cos(yaw);
+      int x_grid = (x_local - latest_costmap_.info.origin.position.x) / latest_costmap_.info.resolution;
+      int y_grid = (y_local - latest_costmap_.info.origin.position.y) / latest_costmap_.info.resolution;
 
-      int global_i = static_cast<int>((global_x - global_map_.info.origin.position.x) / global_map_.info.resolution);
-      int global_j = static_cast<int>((global_y - global_map_.info.origin.position.y) / global_map_.info.resolution);
+      if (x_grid < latest_costmap_.info.width && y_grid < latest_costmap_.info.height && x_grid > 0 && y_grid > 0) {
+          size_t idx_local = y_grid * latest_costmap_.info.width + x_grid;
 
-      if (global_i < 0 || global_i >= static_cast<int>(global_map_.info.width) || global_j < 0 || global_j >= static_cast<int>(global_map_.info.height)) {
-        continue;
-      }
-
-      int global_index = global_j * global_map_.info.width + global_i;
-
-      if (global_map_.data[global_index] == -1 || cost > global_map_.data[global_index]) {
-        global_map_.data[global_index] = cost;
+          int8_t cost = latest_costmap_.data.at(idx_local);
+          if (cost > 0)
+          global_map_.data.at(i) = std::max(global_map_.data.at(i), cost);
       }
     }
-  }
 
 }
 
