@@ -1,9 +1,11 @@
+
 #ifndef COSTMAP_CORE_HPP_
 #define COSTMAP_CORE_HPP_
 
+#include <sensor_msgs/msg/laser_scan.hpp>
+#include <nav_msgs/msg/occupancy_grid.hpp>
+
 #include "rclcpp/rclcpp.hpp"
-#include "nav_msgs/msg/occupancy_grid.hpp"
-#include "sensor_msgs/msg/laser_scan.hpp"
 
 namespace robot
 {
@@ -13,33 +15,27 @@ class CostmapCore {
     // Constructor, we pass in the node's RCLCPP logger to enable logging to terminal
     explicit CostmapCore(const rclcpp::Logger& logger);
 
-    void initializeCostmap(
-      double resolution,
-      int width,
-      int height,
-      const geometry_msgs::msg::Pose origin,
-      double inflation_radius
-    );
-    
-    void inflateObstacle(int x, int y) const;
-    void updateCostmap(const sensor_msgs::msg::LaserScan::SharedPtr scan) const;
+    void setInput(const sensor_msgs::msg::LaserScan::SharedPtr scan);
 
-    std::vector<std::vector<int8_t>> getOccupancyGrid() const;
-    nav_msgs::msg::OccupancyGrid::SharedPtr getCostmapData() const;
-    void setOccupancyGrid(int x, int y, int8_t value) const;
+    void initializeCostmap(const sensor_msgs::msg::LaserScan::SharedPtr scan);
+
+    void convertToGrid(float range, float angle, int &x_grid, int &y_grid);
+
+    void markObstacle(int x_grid, int y_grid);
+    
+    void inflateObstacles();
+    
+    nav_msgs::msg::OccupancyGrid::SharedPtr local_map_;  // local occupancy map in robot's lidar frame
 
   private:
     rclcpp::Logger logger_;
-    nav_msgs::msg::OccupancyGrid::SharedPtr costmap_data_;
-    std::vector<std::vector<int8_t>> occupancy_grid_;
-    double resolution_;
-    double width_;
-    double height_;
-    double inflation_radius_;
-    int inflation_cells_;
-    const int max_cost = 100;
-};
 
+    // map info
+    int X_, Y_;  // origin's coordinates
+    int W_, H_;  // width and height
+    double RES_;  // resolution
+    double MAX_COST_;
+};
 }  
 
 #endif  
